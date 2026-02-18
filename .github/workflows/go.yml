@@ -1,18 +1,41 @@
-# This workflow will build a golang project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
-
-name: Go
+# .github/workflows/go-build.yml
+name: Go Multi-Platform Build
 
 on:
   push:
     branches: [ "main" ]
+    paths:
+      - 'proxy.go'          # 仅当 proxy.go 变更时触发
+      - 'go.mod'           # 依赖变更也触发
+      - 'go.sum'
   pull_request:
     branches: [ "main" ]
+    paths:
+      - 'proxy.go'
+      - 'go.mod'
+      - 'go.sum'
 
 jobs:
-
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            binary_name: proxy-linux-amd64
+          - goos: linux
+            goarch: arm64
+            binary_name: proxy-linux-arm64
+          - goos: windows
+            goarch: amd64
+            binary_name: proxy-windows-amd64.exe
+          - goos: darwin
+            goarch: amd64
+            binary_name: proxy-darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            binary_name: proxy-darwin-arm64
     steps:
     - uses: actions/checkout@v4
 
@@ -20,9 +43,19 @@ jobs:
       uses: actions/setup-go@v4
       with:
         go-version: '1.20'
+        cache: true
 
-    - name: Build
-      run: go build -v ./proxy.go
+    - name: Build ${{ matrix.binary_name }}
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+        CGO_ENABLED: 0      # 静态编译，避免依赖系统库
+      run: |
+        go build -v -o ${{ matrix.binary_name }} -ldflags="-s -w" ./proxy.go
 
-    - name: Test
-      run: go test -v ./proxy.go
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.binary_name }}
+        path: ${{ matrix.binary_name }}
+        retention-days: 7
