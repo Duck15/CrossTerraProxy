@@ -5,8 +5,8 @@ on:
   push:
     branches: [ "main" ]
     paths:
-      - 'proxy.go'          # 仅当 proxy.go 变更时触发
-      - 'go.mod'           # 依赖变更也触发
+      - 'proxy.go'
+      - 'go.mod'
       - 'go.sum'
   pull_request:
     branches: [ "main" ]
@@ -14,6 +14,13 @@ on:
       - 'proxy.go'
       - 'go.mod'
       - 'go.sum'
+  workflow_dispatch:  # ✅ 添加手动触发支持
+    inputs:
+      force_build:
+        description: 'Force build even if no proxy.go changes'
+        required: false
+        default: 'false'
+        type: boolean
 
 jobs:
   build:
@@ -45,11 +52,17 @@ jobs:
         go-version: '1.20'
         cache: true
 
+    # ✅ 可选：手动触发时跳过 paths 检查
+    - name: Check if should build
+      if: github.event_name != 'workflow_dispatch' || inputs.force_build == 'true'
+      run: echo "Building for ${{ matrix.goos }}/${{ matrix.goarch }}"
+
     - name: Build ${{ matrix.binary_name }}
+      if: github.event_name != 'workflow_dispatch' || inputs.force_build == 'true'
       env:
         GOOS: ${{ matrix.goos }}
         GOARCH: ${{ matrix.goarch }}
-        CGO_ENABLED: 0      # 静态编译，避免依赖系统库
+        CGO_ENABLED: 0
       run: |
         go build -v -o ${{ matrix.binary_name }} -ldflags="-s -w" ./proxy.go
 
